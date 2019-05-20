@@ -1,12 +1,24 @@
-Synchronization primitives in the Linux kernel. Part 1.
+리눅스 커널의 동기화 기본기능. Part 1.
 ================================================================================
 
-Introduction
+소개
 --------------------------------------------------------------------------------
 
-This part opens a new chapter in the [linux-insides](https://0xax.gitbooks.io/linux-insides/content/) book. Timers and time management related stuff was described in the previous [chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html). Now time to go next. As you may understand from the part's title, this chapter will describe [synchronization](https://en.wikipedia.org/wiki/Synchronization_%28computer_science%29) primitives in the Linux kernel.
+이 파트는 [linux-insides](https://0xax.gitbooks.io/linux-insides/content/) 책의
+새로운 챕터를 시작합니다. 앞의
+[chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html)
+에서는 타이머와 시간 관리에 대한 내용을 다뤘습니다. 이제 다음으로 넘어갑시다.
+이 파트의 제목에서 이미 이해하셨겠지만, 이 챕터는 리눅스 커널의
+[동기화](https://en.wikipedia.org/wiki/Synchronization_%28computer_science%29)
+기본기능들을 설명합니다.
 
-As always, before we will consider something synchronization related, we will try to know what `synchronization primitive` is in general. Actually, synchronization primitive is a software mechanism which provides the ability to two or more [parallel](https://en.wikipedia.org/wiki/Parallel_computing) processes or threads to not execute simultaneously on the same segment of a code. For example, let's look on the following piece of code:
+항상 그랬듯, 동기화에 관련된 뭔가를 고려하기 전에, `동기화 기본기능` 이
+일반적으로 무엇인가에 대해 알아보겠습니다. 사실, 동기화 기본기능은 두개 이상의
+[병렬](https://en.wikipedia.org/wiki/Parallel_computing) 프로세스나 쓰레드가
+특정 코드 영역을 동시에 수행하지 못하게 하는 소프트웨어 메커니즘입니다. 예를
+들어,
+[kernel/time/clocksource.c](https://github.com/torvalds/linux/master/kernel/time/clocksource.c)
+파일의 다음 코드를 봅시다:
 
 ```C
 mutex_lock(&clocksource_mutex);
@@ -22,9 +34,25 @@ clocksource_select();
 mutex_unlock(&clocksource_mutex);
 ```
 
-from the [kernel/time/clocksource.c](https://github.com/torvalds/linux/master/kernel/time/clocksource.c) source code file. This code is from the `__clocksource_register_scale` function which adds the given [clocksource](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-2.html) to the clock sources list. This function produces different operations on a list with registered clock sources. For example, the `clocksource_enqueue` function adds the given clock source to the list with registered clocksources - `clocksource_list`. Note that these lines of code wrapped to two functions: `mutex_lock` and `mutex_unlock` which takes one parameter - the `clocksource_mutex` in our case.
+이 코드는 특정
+[clocksource](https://0xax.gitbooks.io/linux-insides/content/Timers/linux-timers-2.html)
+를 clock source 리스트에 추가하는 `__clocksource_register_scale` 함수에서
+가져온 겁니다. 이 함수는 등록된 clock source 를 가지고 있는 리스트에 여러
+연산을 수행합니다. 예를 들어, `clocksource_enqueue` 함수는 주어진 clock source
+를 등록된 clocksource를 가지고 있는 리스트 - `clocksource_list` 에 추가합니다.
+이 코드는 두 함수로 싸여져 있음을 알아두시기 바랍니다: 하나의 패러미터 (여기선
+`clocksource_mutex`) 를 받는 `mutex_lock` 과 `mutex_unlock` 입니다.
 
-These functions represent locking and unlocking based on [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion) synchronization primitive. As `mutex_lock` will be executed, it allows us to prevent the situation when two or more threads will execute this code while the `mutex_unlock` will not be executed by process-owner of the mutex. In other words, we prevent parallel operations on a `clocksource_list`. Why do we need `mutex` here? What if two parallel processes will try to register a clock source. As we already know, the `clocksource_enqueue` function adds the given clock source to the `clocksource_list` list right after a clock source in the list which has the biggest rating (a registered clock source which has the highest frequency in the system):
+이 함수들은 [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion) 동기화
+기본기능에 기반한 locking 과 unlocking 을 나타냅니다.  `mutex_lock` 이
+수행되면, 이 함수는 우리가 두개 이상의 쓰레드가 이 mutex 소유자가
+`mutex_unlock` 을 수행하기 전까지는 이 코드를 동시에 수행하는 걸 막을 수 있게
+해줍니다. 달리 말하면, 우리는 `clocksource_list` 의 병렬 연산을 방지합니다.
+여기서 `mutex` 가 필요한 이유가 뭘까요? 두개의 병렬 프로세스가 하나의 clock
+source 를 등록하려 하면 어떻게 될까요. 우리가 이미 알고 있듯,
+`clocksource_enqueue` 함수는 주어진 clock source 를 `clocksource_list` 리스트에
+가장 큰 rating 을 갖는 clock source (시스템에서 가장 높은 frequency 를 갖는
+등록된 clock source) 바로 뒤에 추가시킵니다:
 
 ```C
 static void clocksource_enqueue(struct clocksource *cs)
@@ -41,17 +69,25 @@ static void clocksource_enqueue(struct clocksource *cs)
 }
 ```
 
-If two parallel processes will try to do it simultaneously, both process may found the same `entry` may occur [race condition](https://en.wikipedia.org/wiki/Race_condition) or in other words, the second process which will execute `list_add`, will overwrite a clock source from the first thread.
+만약 두개의 병렬 프로세스가 이걸 동시에 수행하면, 두 프로세스 모두 같은 `entry`
+를 보게 되어 [race condition](https://en.wikipedia.org/wiki/Race_condition) 을
+일으킬 수 있는데 이를 달리 말하면, 두번째 프로세스가 `list_add` 를 수행함으로써
+첫번째 쓰레드의 clock source 를 덮어쓰게 될겁니다.
 
-Besides this simple example, synchronization primitives are ubiquitous in the Linux kernel. If we will go through the previous [chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html) or other chapters again or if we will look at the Linux kernel source code in general, we will meet many places like this. We will not consider how `mutex` is implemented in the Linux kernel. Actually, the Linux kernel provides a set of different synchronization primitives like:
+이 간단한 예제 외에, 동기화 기본기능은 리눅스 커널의 모든 곳에 있습니다. 앞의
+[chapter](https://0xax.gitbooks.io/linux-insides/content/Timers/index.html)
+또는 다른 챕터를 다시 보거나 일반적인 리눅스 커널 솟 크도르르 보게 되면 이런
+것들을 많이 볼 수 있을 겁니다. 우린 리눅스 커널에서 `mutex` 가 어떻게 구현되어
+있는지는 고려하지 않겠습니다. 사실, 리눅스 커널은 다양한 동기화 기본기능들을
+제공합니다:
 
 * `mutex`;
-* `semaphores`; 
-* `seqlocks`;
-* `atomic operations`;
-* etc.
+* `semaphore`;
+* `seqlock`;
+* `atomic operation`;
+* 기타 등등.
 
-We will start this chapter from the `spinlock`.
+우린 이 챕터를 `spinlock` 으로 시작하겠습니다.
 
 Spinlocks in the Linux kernel.
 --------------------------------------------------------------------------------
