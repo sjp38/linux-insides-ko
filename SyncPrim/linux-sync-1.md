@@ -89,15 +89,26 @@ static void clocksource_enqueue(struct clocksource *cs)
 
 우린 이 챕터를 `spinlock` 으로 시작하겠습니다.
 
-Spinlocks in the Linux kernel.
+리눅스 커널의 spinlock.
 --------------------------------------------------------------------------------
 
-The `spinlock` is a low-level synchronization mechanism which in simple words, represents a variable which can be in two states:
+`spinlock` 간단히 말해 은 두개의 상태를 가질 수 있는 변수를 갖는 낮은 단계의
+동기화 메커니즘입니다:
 
-* `acquired`;
-* `released`.
+* `획득됨 (acquired)`;
+* `해제됨 (released)`.
 
-Each process which wants to acquire a `spinlock`, must write a value which represents `spinlock acquired` state to this variable and write `spinlock released` state to the variable. If a process tries to execute code which is protected by a `spinlock`, it will be locked while a process which holds this lock will release it. In this case all related operations must be [atomic](https://en.wikipedia.org/wiki/Linearizability) to prevent [race conditions](https://en.wikipedia.org/wiki/Race_condition) state. The `spinlock` is represented by the `spinlock_t` type in the Linux kernel. If we will look at the Linux kernel code, we will see that this type is [widely](http://lxr.free-electrons.com/ident?i=spinlock_t) used. The `spinlock_t` is defined as:
+`spinlock` 을 획득하고자 하는 각 프로세스는 `spinlock 획득됨` 을 의미하는 값을
+이 변수에 써야하고 이후에는 `spinlock 해제됨` 상태를 이 변수에 써야 합니다.
+만약 어떤 프로세스가 `spinlock` 으로 보호되는 코드를 수행하려 하면, 이
+프로세스는 이 락을 잡고 있는 프로세스가 그 락을 놓기 전까지 멈춰 있게 됩니다.
+이 경우 모든 관련된 연산은 [원자적
+(atomic)](https://en.wikipedia.org/wiki/Linearizability) 이어서 [race
+condition](https://en.wikipedia.org/wiki/Race_condition) 상태를 방지할 수
+있어야 합니다. 이 `spinlock` 은 리눅스 커널의 `spinlock_t` 타입으로 표현됩니다.
+우리가 리눅스 커널 코드를 보려 한다면, 이 타입이
+[광범위하게](http://lxr.free-electrons.com/ident?i=spinlock_t) 사용되는 걸 볼
+수 있을 겁니다. 이 `spinlock_t` 는 다음과 같이 정의되어 있으며:
 
 ```C
 typedef struct spinlock {
@@ -115,7 +126,13 @@ typedef struct spinlock {
 } spinlock_t;
 ```
 
-and located in the [include/linux/spinlock_types.h](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h) header file. We may see that its implementation depends on the state of the `CONFIG_DEBUG_LOCK_ALLOC` kernel configuration option. We will skip this now, because all debugging related stuff will be in the end of this part. So, if the `CONFIG_DEBUG_LOCK_ALLOC` kernel configuration option is disabled, the `spinlock_t` contains [union](https://en.wikipedia.org/wiki/Union_type#C.2FC.2B.2B) with one field which is - `raw_spinlock`:
+[include/linux/spinlock_types.h](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h)
+헤더 파일에 있습니다. 이 구현은 `CONFIG_DEBUG_LOCK_ALLOC` 커널 설정 옵션의
+상태에 종속적임을 알 수 있을 겁니다. 이건 지금은 건너뛸텐데, 모든 디버깅 관련된
+것들은 이 파트의 끝에서 다룰 것이기 때문입니다. 따라서,
+`CONFIG_DEBUG_LOCK_ALLOC` 커널 설정 옵션은 비활성화 되어 있다면, 이
+`spinlock_t` 는 `raw_spinlock` 이라는 하나의 필드를 갖는
+[union](https://en.wikipedia.org/wiki/Union_type#C.2FC.2B.2B) 만을 갖습니다:
 
 ```C
 typedef struct spinlock {
@@ -125,7 +142,10 @@ typedef struct spinlock {
 } spinlock_t;
 ```
 
-The `raw_spinlock` structure defined in the [same](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h) header file represents the implementation of `normal` spinlock. Let's look how the `raw_spinlock` structure is defined:
+이 `raw_spinlock` 구조체는
+[같은](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h)
+헤더 파일에 정의되어 있으며 `일반' 스핀락의 구현을 나타냅니다. `raw_spinlock`
+구조체가 어떻게 정의되어 있는지 봅시다:
 
 ```C
 typedef struct raw_spinlock {
@@ -140,7 +160,12 @@ typedef struct raw_spinlock {
 } raw_spinlock_t;
 ```
 
-where the `arch_spinlock_t` represents architecture-specific `spinlock` implementation. As we mentioned above, we will skip debugging kernel configuration options. As we focus on [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture in this book, the `arch_spinlock_t` that we will consider is defined in the [include/asm-generic/qspinlock_types.h](https://github.com/torvalds/linux/master/include/asm-generic/qspinlock_types.h) header file and looks:
+`arch_spinlock_t` 는 아키텍쳐에 특수한 `spinlock` 구현을 나타냅니다. 앞서
+언급되었듯, 디버깅 커널 설정 옵션은 건너뛰겠습니다. 이 책은
+[x86_64](https://en.wikipedia.org/wiki/X86-64) 아키텍쳐에 집중되어 있으므로,
+우리가 보고자 하는 `arch_spinlock_t` 는
+[include/asm-generic/qspinlock_types.h](https://github.com/torvalds/linux/master/include/asm-generic/qspinlock_types.h)
+헤더 파일에 있으며 다음과 같습니다:
 
 ```C
 typedef struct qspinlock {
@@ -158,18 +183,24 @@ typedef struct qspinlock {
 } arch_spinlock_t;
 ```
 
-We will not stop on this structures for now. Let's look at the operations on a spinlock. The Linux kernel provides following main operations on a `spinlock`:
+지금은 이 구조체를 더 들여다 보지 않겠습니다. 스핀락을 사용하는 연산을
+알아봅시다. 리눅스 커널은 `spinlock` 에 대해 다음과 같은 연산들을 제공합니다:
 
-* `spin_lock_init` - produces initialization of the given `spinlock`;
-* `spin_lock` - acquires given `spinlock`;
-* `spin_lock_bh` - disables software [interrupts](https://en.wikipedia.org/wiki/Interrupt) and acquire given `spinlock`.
-* `spin_lock_irqsave` and `spin_lock_irq` - disable interrupts on local processor and preserve/not preserve previous interrupt state in the `flags`;
-* `spin_unlock` - releases given `spinlock`;
-* `spin_unlock_bh` - releases given `spinlock` and enables software interrupts;
-* `spin_is_locked` - returns the state of the given `spinlock`;
-* and etc.
+* `spin_lock_init` - 특정 `spinlock` 의 초기화를 수행합니다;
+* `spin_lock` - 특정 `spinlock` 을 획득합니다;
+* `spin_lock_bh` - 소프트웨어
+  [인터럽트](https://en.wikipedia.org/wiki/Interrupt) 를 불능화 시키고 특정
+  `spinlock` 을 획득합니다.
+* `spin_lock_irqsave` 와 `spin_lock_irq` - 이 프로세서에서의 인터럽트를 불능화
+  시키고 앞의 인터럽트 상태를 `flags` 에 보존하거나/하지 않습니다;
+* `spin_unlock` - 특정 `spinlock` 을 해제합니다;
+* `spin_unlock_bh` - 특정 `spinlock` 을 해제하고 소프트웨어 인터럽트를 활성화 시킵니다;
+* `spin_is_locked` - 특정 `spinlock` 의 상태를 리턴합니다;
+* 그리고 그 외에 기타등등.
 
-Let's look on the implementation of the `spin_lock_init` macro. As I already wrote, this and other macro are defined in the [include/linux/spinlock.h](https://github.com/torvalds/linux/master/include/linux/spinlock.h) header file and the `spin_lock_init` macro looks:
+`spin_lock_init` 매크로의 구현을 들여다 봅시다. 앞서 썼듯, 이것 등의 매크로는
+[include/linux/spinlock.h](https://github.com/torvalds/linux/master/include/linux/spinlock.h)
+헤더 파일에 있으며 `spin_lock_init` 매크로는 아래와 같습니다:
 
 ```C
 #define spin_lock_init(_lock)			\
@@ -179,7 +210,11 @@ do {						\
 } while (0)
 ```
 
-As we may see, the `spin_lock_init` macro takes a `spinlock` and executes two operations: check the given `spinlock` and execute the `raw_spin_lock_init`. The implementation of the `spinlock_check` is pretty easy, this function just returns the `raw_spinlock_t` of the given `spinlock` to be sure that we got exactly `normal` raw spinlock:
+보듯이, `spin_lock_init` 매크로는 `spinlock` 을 받아서 두개의 연산을
+수행합니다: 해당 `spinlock` 을 체크하고 `raw_spin_lock_init` 을 수행합니다.
+`spinlock_check` 의 구현은 상당히 간단한데, 이 함수는 단지 주어진 `spinlock` 의
+`raw_spinlock_t` 를 리턴해서 우리가 정확히 `평범한` raw spinlock 을 가졌음을
+확신할 수 있게 합니다:
 
 ```C
 static __always_inline raw_spinlock_t *spinlock_check(spinlock_t *lock)
@@ -188,7 +223,7 @@ static __always_inline raw_spinlock_t *spinlock_check(spinlock_t *lock)
 }
 ```
 
-The `raw_spin_lock_init` macro:
+`raw_spin_lock_init` 매크로입니다:
 
 ```C
 # define raw_spin_lock_init(lock)		\
@@ -197,7 +232,12 @@ do {						\
 } while (0)					\
 ```
 
-assigns the value of the `__RAW_SPIN_LOCK_UNLOCKED` with the given `spinlock` to the given `raw_spinlock_t`. As we may understand from the name of the `__RAW_SPIN_LOCK_UNLOCKED` macro, this macro does initialization of the given `spinlock` and set it to `released` state. This macro is defined in the [include/linux/spinlock_types.h](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h) header file and expands to the following macros:
+이 매크로는 `__RAW_SPIN_LOCK_UNLOCKED` 값을 주어진 `spinlock` 의
+`raw_spinlock_t` 에 저장합니다. `__RAW_SPIN_LOCK_UNLOCKED` 매크로의 이름에서
+유추할 수 있듯이, 이 매크로는 주어진 `spinlock` 을 초기화 하고 이를 `해제된`
+상태로 설정합니다. 이 매크로는
+[include/linu/spinlock_types.h](https://github.com/torvalds/linux/master/include/linux/spinlock_types.h)
+헤더 파일에 있으며 다음 매크로로 확장됩니다:
 
 ```C
 #define __RAW_SPIN_LOCK_UNLOCKED(lockname)      \
@@ -211,21 +251,28 @@ assigns the value of the `__RAW_SPIN_LOCK_UNLOCKED` with the given `spinlock` to
          }
 ```
 
-As I already wrote above, we will not consider stuff which is related to debugging of synchronization primitives. In this case we will not consider the `SPIN_DEBUG_INIT` and the `SPIN_DEP_MAP_INIT` macros. So the `__RAW_SPINLOCK_UNLOCKED` macro will be expanded to the:
+앞에서 설명했듯, 우린 동기화 기본 기능의 디버깅에 관련된 것들은 고려하지
+않겠습니다. 이 경우 우린 `SPIN_DEBUG_INIT` 과 `SPIN_DEP_MAP_INIT` 매크로를
+무시합니다. 따라서 `__RAW_SPINLOCK_UNLOCKED` 매크로는 아래와 같이 확장됩니다:
 
 ```C
 *(&(_lock)->rlock) = __ARCH_SPIN_LOCK_UNLOCKED;
 ```
 
-where the `__ARCH_SPIN_LOCK_UNLOCKED` is:
+여기서 `__ARCH_SPIN_LOCK_UNLOCKED` 는
+[x86_64](https://en.wikipedia.org/wiki/X86-64) 에서 아래와 같습니다:
 
 ```C
 #define __ARCH_SPIN_LOCK_UNLOCKED       { { .val = ATOMIC_INIT(0) } }
 ```
 
-for the [x86_64](https://en.wikipedia.org/wiki/X86-64) architecture. So, after the expansion of the `spin_lock_init` macro, a given `spinlock` will be initialized and its state will be - `unlocked`.
+따라서, `spin_lock_init` 매크로의 확장 후에는, 주어진 `spinlock` 이 초기화 되고
+그 상태는 `해제됨` 이 됩니다.
 
-From this moment we know how to initialize a `spinlock`, now let's consider [API](https://en.wikipedia.org/wiki/Application_programming_interface) which Linux kernel provides for manipulations of `spinlocks`. The first is:
+이제 우리는 `spinlock` 을 어떻게 초기화 하는지 알았으니, 리눅스 커널이
+`spinlock` 을 조정하기 위해 제공하는
+[API](https://en.wikipedia.org/wiki/Application_programming_interface) 를
+알아봅시다. 첫번째는 스핀락을 `획득` 할 수 있게 하는 함수입니다:
 
 ```C
 static __always_inline void spin_lock(spinlock_t *lock)
@@ -234,25 +281,35 @@ static __always_inline void spin_lock(spinlock_t *lock)
 }
 ```
 
-function which allows us to `acquire` a spinlock. The `raw_spin_lock` macro is defined in the same header file and expnads to the call of `_raw_spin_lock`:
+이 `raw_spin_lock` 매크로는 같은 헤더파일 내에 정의되어 있으며 `_raw_spin_lock`
+으로 확장됩니다:
 
 ```C
 #define raw_spin_lock(lock)	_raw_spin_lock(lock)
 ```
 
-Where `_raw_spin_lock` is defined depends on whether `CONFIG_SMP` option is set and `CONFIG_INLINE_SPIN_LOCK` option is set. If the [SMP](https://en.wikipedia.org/wiki/Symmetric_multiprocessing) is disabled, `_raw_spin_lock` is defined in the [include/linux/spinlock_api_up.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock_api_up.h) header file as a macro and looks like:
+`_raw_spin_lock` 은 `CONFIG_SMP` 옵션이 설정되어 있는지 그리고
+`CONFIG_INLINE_SPIN_LOCK` 옵션이 설정되어 있는지에 종속적으로 정의되어
+있습니다. 만약 [SMP](https://en.wikipedia.org/wiki/Symmetric_multiprocessing)
+이 비활성화 되어 있다면, `_raw_spin_lock` 은
+[include/linux/spinlock_api_up.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock_api_up.h)
+헤더 파일에 정의되어 있습니다:
 
 ```C
 #define _raw_spin_lock(lock)	__LOCK(lock)
 ```
 
-If the SMP is enabled and `CONFIG_INLINE_SPIN_LOCK` is set, it is defined in [include/linux/spinlock_api_smp.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock_api_smp.h) header file as the following:
+SMP 가 활성화 되어 있고 `CONFIG_INLINE_SPIN_LOCK` 이 설정되어 있다면,
+[include/linux/spinlock_api_smp.h](https://github.com/torvalds/linux/blob/master/include/linux/spinlock_api_smp.h)
+헤더 파일에 다음과 같이 정의되어 있습니다:
 
 ```C
 #define _raw_spin_lock(lock) __raw_spin_lock(lock)
 ```
 
-If the SMP is enabled and `CONFIG_INLINE_SPIN_LOCK` is not set, it is defined in [kernel/locking/spinlock.c](https://github.com/torvalds/linux/blob/master/kernel/locking/spinlock.c) source code file as the following:
+만약 SMP 가 활성화 되어 있고 `CONFIG_INLINE_SPIN_LOCK` 이 설정되어 있지 않다면,
+[kernel/locking/spinlock.c](https://github.com/torvalds/linux/blob/master/kernel/locking/spinlock.c)
+에 다음과 같이 정의되어 있습니다:
 
 ```C
 void __lockfunc _raw_spin_lock(raw_spinlock_t *lock)
@@ -261,7 +318,8 @@ void __lockfunc _raw_spin_lock(raw_spinlock_t *lock)
 }
 ```
 
-Here we will consider the latter form of `_raw_spin_lock`. The `__raw_spin_lock` function looks:
+여기선 뒤쪽의 `_raw_spin_lock` 형태를 고려하겠습니다. `__raw_spin_lock` 함수는
+아래와 같습니다:
 
 ```C
 static inline void __raw_spin_lock(raw_spinlock_t *lock)
@@ -272,7 +330,15 @@ static inline void __raw_spin_lock(raw_spinlock_t *lock)
 }
 ```
 
-As you may see, first of all we disable [preemption](https://en.wikipedia.org/wiki/Preemption_%28computing%29) by the call of the `preempt_disable` macro from the [include/linux/preempt.h](https://github.com/torvalds/linux/blob/master/include/linux/preempt.h) (more about this you may read in the ninth [part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-9.html) of the Linux kernel initialization process chapter). When we unlock the given `spinlock`, preemption will be enabled again:
+볼 수 있듯, 여기선 먼저
+[include/linux/preempt.h](https://github.com/torvalds/linux/blob/master/include/linux/preempt.h)
+의 `preempt_disable` 매크로를 호출해서 (더 자세한 건 리눅스 커널 초기화
+프로세스 챕터의 아홉번째
+[part](https://0xax.gitbooks.io/linux-insides/content/Initialization/linux-initialization-9.html)
+를 참고하세요)
+[preemption](https://en.wikipedia.org/wiki/Preemption_%28computing%29) 을
+불능화 시킵니다.  이 `spinlock` 을 해제할 때 preemption 은 다시 활성화
+될겁니다:
 
 ```C
 static inline void __raw_spin_unlock(raw_spinlock_t *lock)
@@ -284,14 +350,16 @@ static inline void __raw_spin_unlock(raw_spinlock_t *lock)
 }
 ```
 
-We need to do this to prevent the process from other processes to preempt it while it is spinning on a lock. The `spin_acquire` macro which through a chain of other macros expands to the call of the:
+락을 잡기 위해 spin 하고 있는 사이에 다른 프로세스가 이 프로세스를 preempt
+하는걸 막기 위해 이걸 해야 합니다. `spin_acquire` 매크로는 다른 연결을 통해
+다음과 같이 확장됩니다:
 
 ```C
 #define spin_acquire(l, s, t, i)                lock_acquire_exclusive(l, s, t, NULL, i)
 #define lock_acquire_exclusive(l, s, t, n, i)           lock_acquire(l, s, t, 0, 1, n, i)
 ```
 
-The `lock_acquire` function:
+이 `lock_acquire` 함수는:
 
 ```C
 void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
@@ -315,22 +383,39 @@ void lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 }
 ```
 
-As I wrote above, we will not consider stuff here which is related to debugging or tracing. The main point of the `lock_acquire` function is to disable hardware interrupts by the call of the `raw_local_irq_save` macro, because the given spinlock might be acquired with enabled hardware interrupts. In this way the process will not be preempted. Note that in the end of the `lock_acquire` function we will enable hardware interrupts again with the help of the `raw_local_irq_restore` macro. As you already may guess, the main work will be in the `__lock_acquire` function which is defined in the [kernel/locking/lockdep.c](https://github.com/torvalds/linux/blob/master/kernel/locking/lockdep.c) source code file.
+앞에서 이야기했듯 디버깅이나 트레이싱에 관련된 것들은 다루지 않겠습니다.
+`lock_acquire` 함수의 중요 포인트는 `raw_local_irq_save` 매크로를 호출함으로써
+하드웨어 인터럽트를 불능화 시키는 것으로, 주어진 spinlock 은 활성화 된 하드웨어
+인터럽트에서 획득될 수도 있기 때문입니다. 이런 방법으로 이 프로세스는 preempt
+되지 않게 됩니다. `lock_acquire` 함수의 마지막에서 `raw_local_irq_restore`
+매크로를 통해 하드웨어 인터럽트를 다시 활성화 시킴을 알아두시기 바랍니다.
+짐작했겠지만, `__lock_acquire` 함수의 주요 부분은
+[kernel/locking/lockdep.c](https://github.com/torvalds/linux/blob/master/kernel/locking/lockdep.c)
+소스 코드 파일에 있습니다.
 
-The `__lock_acquire` function looks big. We will try to understand what this function does, but not in this part. Actually this function is mostly related to the Linux kernel [lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt) and it is not topic of this part. If we will return to the definition of the `__raw_spin_lock` function, we will see that it contains the following definition in the end:
+이 `__lock_acquire` 함수는 좀 커 보입니다. 우린 이 함수가 무슨 일을 하는지
+이해하려 노력해 보겠지만, 여기서는 아닙니다. 사실 이 함수는 리눅스 커널
+[lock validator](https://www.kernel.org/doc/Documentation/locking/lockdep-design.txt)
+와 연관되어 있으며 그건 이 파트의 주제가 아닙니다. 다시 `__raw_spin_lock`
+함수로 돌아가서, 결국 아래 정의를 보게 됩니다:
 
 ```C
 LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);
 ```
 
-The `LOCK_CONTENDED` macro is defined in the [include/linux/lockdep.h](https://github.com/torvalds/linux/blob/master/include/linux/lockdep.h) header file and just calls the given function with the given `spinlock`:
+이 `LOCK_CONTENDED` 매크로는
+[include/linux/lockdep.h](https://github.com/torvalds/linux/blob/master/include/linux/lockdep.h)
+헤더 파일에 정의되어 있는데 주어진 `spinlock` 을 가지고 특정 함수를 호출할
+뿐입니다:
 
 ```C
 #define LOCK_CONTENDED(_lock, try, lock) \
          lock(_lock)
 ```
 
-In our case, the `lock` is `do_raw_spin_lock` function from the [include/linux/spinlock.h](https://github.com/torvalds/linux/blob/master/include/linux/spnlock.h) header file and the `_lock` is the given `raw_spinlock_t`:
+우리의 경우, 이 `lock` 은
+[include/linux/spinlock.h](https://github.com/torvalds/linux/blob/master/include/linux/spnlock.h)
+의 `do_raw_spin_lock` 함수이고 `_lock` 은 주어진 `raw_spinlock_t` 입니다:
 
 ```C
 static inline void do_raw_spin_lock(raw_spinlock_t *lock) __acquires(lock)
@@ -340,13 +425,17 @@ static inline void do_raw_spin_lock(raw_spinlock_t *lock) __acquires(lock)
 }
 ```
 
-The `__acquire` here is just [Sparse](https://en.wikipedia.org/wiki/Sparse) related macro and we are not interested in it in this moment. The `arch_spin_lock` macro is defined in the [include/asm-generic/qspinlock.h](https://github.com/torvalds/linux/blob/master/include/asm-generic/qspinlocks.h) header file as the following:
+여기서의 `__acquire` 는 그저 [Sparse](https://en.wikipedia.org/wiki/Sparse) 에
+연관된 매크로이고 우린 지금은 여기엔 관심 없습니다. `arch_spin_lock` 매크로는
+[include/asm-generic/qspinlock.h](https://github.com/torvalds/linux/blob/master/include/asm-generic/qspinlocks.h)
+헤더 파일에 다음과 같이 정의되어 있습니다:
 
 ```C
 #define arch_spin_lock(l)               queued_spin_lock(l)
 ```
 
-We stop here for this part. In the next part, we'll dive into how queued spinlocks works and related concepts.
+이 파트는 여기서 멈춥니다. 다음 파트에서, 우린 queued spinlock 이 어떻게
+동작하는지 알아보고 관련된 컨셉들을 알아봅니다.
 
 Conclusion
 --------------------------------------------------------------------------------
