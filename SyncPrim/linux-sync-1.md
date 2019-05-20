@@ -437,16 +437,21 @@ static inline void do_raw_spin_lock(raw_spinlock_t *lock) __acquires(lock)
 이 파트는 여기서 멈춥니다. 다음 파트에서, 우린 queued spinlock 이 어떻게
 동작하는지 알아보고 관련된 컨셉들을 알아봅니다.
 
-Conclusion
+결론
 --------------------------------------------------------------------------------
 
-This concludes the first part covering synchronization primitives in the Linux kernel. In this part, we met first synchronization primitive `spinlock` provided by the Linux kernel. In the next part we will continue to dive into this interesting theme and will see other `synchronization` related stuff.
+이 섹션은 리눅스 커널의 동기화 기본 기능에 대해 다루는 첫번째 파트를 마칩니다.
+이 파트에서, 우린 리눅스 커널에 의해 제공되는 첫번째 동기화 기본 기능인
+`spinlock` 을 알아봤습니다. 다음 파트에서 우린 이 흥미로운 주제에 더 깊이
+들어가보고 다른 `동기화` 관련된 것들을 알아보겠습니다.
 
-If you have questions or suggestions, feel free to ping me in twitter [0xAX](https://twitter.com/0xAX), drop me [email](anotherworldofworld@gmail.com) or just create [issue](https://github.com/0xAX/linux-insides/issues/new).
+질문이나 제안이 있다면, 제게 트위터 [0xAX](https://twitter.com/0xAX) 로 연락
+주시거나 [email](anotherworldofworld@gmail.com) 을 보내주시거나
+[issue](https://github.com/0xAX/linux-insides/issues/new) 를 만들어 주시기
+바랍니다.
 
-**Please note that English is not my first language and I am really sorry for any inconvenience. If you found any mistakes please send me PR to [linux-insides](https://github.com/0xAX/linux-insides).**
 
-Links
+링크
 --------------------------------------------------------------------------------
 
 * [Concurrent computing](https://en.wikipedia.org/wiki/Concurrent_computing)
